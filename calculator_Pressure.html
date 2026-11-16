@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Генератор журнала по давлению</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; background: #f0f2f5; color: #333; }
+  .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+  .input-group { display: flex; flex-direction: column; }
+  label { font-weight: 600; margin-bottom: 5px; font-size: 14px; color: #555; }
+  input[type="number"], select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+  button { width: 100%; padding: 14px; background: #2980b9; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+  button:hover { background: #2471a3; }
+  button.recalc { background: #27ae60; }
+  button.recalc:hover { background: #1e8449; }
+  #output { margin-top: 30px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 20px 0; }
+  th, td { border: 1px solid #bdc3c7; padding: 4px; text-align: center; }
+  /* Разделитель между статикой и динамикой */
+  #dataTable tr:first-child th:nth-child(2) { border-right: 3px solid #2c3e50; }
+  #dataTable td:nth-child(4) { border-right: 3px solid #2c3e50; }
+  th { background: #ecf0f1; font-weight: 600; color: #2c3e50; }
+  .sub-header { background: #d5dbdb; font-size: 12px; }
+  .avg-col { background: #e8f8f5; font-weight: bold; color: #16a085; }
+  .info-box { background: #eaf2f8; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #2980b9; font-size: 14px; line-height: 1.5; }
+  .formula-box { background: #fef9e7; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 4px solid #f1c40f; font-size: 14px; line-height: 1.8; font-family: 'Courier New', monospace; }
+  .formula-box .general { color: #2c3e50; font-weight: bold; }
+  .formula-box .sub { color: #7f8c8d; }
+  .formula-box .res { color: #c0392b; font-weight: bold; }
+  .hidden { display: none; }
+  .checkbox-group { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+  .checkbox-group input { width: auto; }
+  .editable { width: 60px; padding: 4px; border: 1px solid #bdc3c7; border-radius: 3px; text-align: center; font-size: 13px; }
+  .editable:focus { border-color: #2980b9; outline: none; background: #fff9e6; }
+  .editable.manual { background: #fff3cd; border-color: #f39c12; }
+  .avg-display { font-weight: bold; color: #16a085; }
+  .recalc-hint { 
+    background: #fff3cd; 
+    padding: 15px 10px; 
+    border-radius: 6px; 
+    margin: 15px 0; 
+    border-left: 4px solid #f39c12; 
+    width: 100%; /* Растягиваем на всю ширину */
+    box-sizing: border-box;
+  }
+  .recalc-hint table { 
+    width: 100%; 
+    border-collapse: collapse; 
+  }
+  .recalc-hint td { 
+    padding: 8px 4px; 
+    font-size: 15px; 
+    text-align: center;
+    border: 1px solid #f0c040; /* Легкая сетка для аккуратности */
+  }
+  .recalc-hint td b { 
+    font-weight: bold; 
+    white-space: nowrap; /* Запрещаем перенос текста внутри ячейки */
+  }
+  .dev-good { color: #27ae60; font-weight: bold; }
+  .dev-bad { color: #c0392b; font-weight: bold; background-color: #fadbd8; padding: 2px 6px; border-radius: 4px; }
+    /* Стили для модального окна с формулами */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-window {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 900px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #ecf0f1;
+    margin-bottom: 20px;
+  }
+  .modal-controls {
+    display: flex;
+    gap: 8px;
+  }
+  .modal-minimize, .modal-close {
+    width: auto;
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px 10px;
+    line-height: 1;
+  }
+  .modal-minimize {
+    color: #2980b9;
+  }
+  .modal-minimize:hover {
+    color: white;
+    background: #2980b9;
+    border-radius: 4px;
+  }
+  .modal-close {
+    color: #c0392b;
+  }
+  .modal-close:hover {
+    color: white;
+    background: #c0392b;
+    border-radius: 4px;
+  }
+  .modal-window.minimized #modalFormulas {
+    display: none;
+  }
+  .modal-window.minimized {
+    max-height: auto;
+    overflow: visible;
+  }
+  .modal-title {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: bold;
+  }
+  .btn-show-formulas {
+    background: #8e44ad;
+    margin-top: 10px;
+  }
+  .btn-show-formulas:hover { background: #7d3c98; }
+    .btn-export {
+    background: #2980b9;
+    margin-top: 10px;
+  }
+  .btn-export:hover { background: #2471a3; }
+    .pressure-group { background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #e0e0e0; margin-bottom: 12px; }
+  .pressure-group-title { font-weight: bold; color: #2c3e50; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .pressure-row { display: flex; align-items: center; gap: 15px; margin-bottom: 8px; flex-wrap: wrap; }
+  .pressure-row:last-child { margin-bottom: 0; }
+  .pressure-label { font-weight: bold; color: #34495e; font-size: 13px; min-width: 110px; }
+  .pressure-field { display: flex; align-items: center; gap: 6px; }
+  .pressure-field label { font-size: 12px; color: #555; }
+  .pressure-field input { width: 80px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; text-align: center; }
+  .pressure-field input:focus { outline: none; border-color: #2980b9; }
+  .pressure-field input.manual { background: #fffacd; }
+  .pressure-orient { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .pressure-orient label { font-weight: bold; color: #34495e; font-size: 13px; }
+  .pressure-orient input { width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; text-align: center; }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Генератор замеров давления</h2>
+
+  <div class="grid">
+    <div class="input-group">
+      <label>Форма воздуховода:</label>
+      <select id="shape" onchange="updateInputs()">
+        <option value="circle">Круглый</option>
+        <option value="rect">Прямоугольный</option>
+      </select>
+    </div>
+    <div class="input-group" id="diameter-group">
+      <label>Диаметр D (мм):</label>
+      <input type="number" id="diameter" value="315">
+    </div>
+    <div class="input-group hidden" id="width-group">
+      <label>Ширина a (мм):</label>
+      <input type="number" id="width" value="400">
+    </div>
+    <div class="input-group hidden" id="height-group">
+      <label>Высота b (мм):</label>
+      <input type="number" id="height" value="250">
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="input-group">
+      <label>Атмосферное B<sub>а</sub> (Па):</label>
+      <input type="number" id="pb" value="101000">
+    </div>
+    <div class="input-group">
+      <label>Температура п.в. t (°C):</label>
+      <input type="number" id="temp" value="16.4" step="0.1">
+    </div>
+    <div class="input-group">
+      <label>Влажность п.в. φ (%):</label>
+      <input type="number" id="humidity" value="32.3" step="0.1">
+    </div>
+  </div>
+
+  <!-- Группа Pс -->
+  <div class="pressure-group">
+    <div class="pressure-group-title">Статическое давление Pс</div>
+    <div class="pressure-orient">
+      <label>Ориентир Pс (Па):</label>
+      <input type="number" id="ps" value="-218">
+    </div>
+    <div class="pressure-row">
+      <div class="pressure-label">Межточечный:</div>
+      <div class="pressure-field">
+        <label>Мин (Па):</label>
+        <input type="number" id="ps_min" value="-220" step="1">
+      </div>
+      <div class="pressure-field">
+        <label>Макс (Па):</label>
+        <input type="number" id="ps_max" value="-216" step="1">
+      </div>
+    </div>
+    <div class="pressure-row">
+      <div class="pressure-label">Внутри точки:</div>
+      <div class="pressure-field">
+        <label>Вниз (Па):</label>
+        <input type="number" id="ps_down" value="1" step="1" min="0">
+      </div>
+      <div class="pressure-field">
+        <label>Вверх (Па):</label>
+        <input type="number" id="ps_up" value="1" step="1" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Группа Pд -->
+  <div class="pressure-group">
+    <div class="pressure-group-title">Динамическое давление Pд</div>
+    <div class="pressure-orient">
+      <label>Ориентир Pд (Па):</label>
+      <input type="number" id="pd" value="42">
+    </div>
+    <div class="pressure-row">
+      <div class="pressure-label">Межточечный:</div>
+      <div class="pressure-field">
+        <label>Коэф. мин:</label>
+        <input type="number" id="pd_coef_min" value="0.57" step="0.01" min="0">
+      </div>
+      <div class="pressure-field">
+        <label>Коэф. макс:</label>
+        <input type="number" id="pd_coef_max" value="1.43" step="0.01" min="0">
+      </div>
+    </div>
+    <div class="pressure-row">
+      <div class="pressure-label">Внутри точки:</div>
+      <div class="pressure-field">
+        <label>Вниз (Па):</label>
+        <input type="number" id="pd_down" value="2" step="1" min="0">
+      </div>
+      <div class="pressure-field">
+        <label>Вверх (Па):</label>
+        <input type="number" id="pd_up" value="2" step="1" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- Проектный расход -->
+  <div class="grid">
+    <div class="input-group">
+      <label>Проектный расход L (м³/ч):</label>
+      <input type="number" id="l_design" value="2400">
+    </div>
+  </div>
+
+  <div style="background: #eaf2f8; padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; color: #2c3e50; border-left: 3px solid #2980b9;">
+    <b>Внимание:</b> P<sub>д.ср</sub> генерируется в пределах ±1 Па от ориентира. Для точности — перегенерируйте журнал или измените значение вручную в таблице.
+  </div>
+
+  <button onclick="generate()">Сгенерировать журнал</button>
+
+  <div id="output"></div>
+</div>
+<!-- Модальное окно с формулами -->
+<div id="modalOverlay" class="modal-overlay" onclick="closeFormulasOutside(event)">
+  <div class="modal-window" id="modalWindow">
+    <div class="modal-header" id="modalHeader">
+      <div class="modal-title">Расчёты</div>
+      <div class="modal-controls">
+        <button class="modal-minimize" onclick="toggleMinimize()" title="Свернуть/развернуть">−</button>
+        <button class="modal-close" onclick="closeFormulas()" title="Закрыть">&times;</button>
+      </div>
+    </div>
+    <div id="modalFormulas"></div>
+  </div>
+</div>
+
+<script>
+function updateInputs() {
+  const shape = document.getElementById('shape').value;
+  document.getElementById('diameter-group').classList.toggle('hidden', shape !== 'circle');
+  document.getElementById('width-group').classList.toggle('hidden', shape !== 'rect');
+  document.getElementById('height-group').classList.toggle('hidden', shape !== 'rect');
+}
+
+function updatePdDefaults() {
+  const shape = document.getElementById('shape').value;
+  const diameter = parseInt(document.getElementById('diameter').value) || 315;
+  const width = parseInt(document.getElementById('width').value) || 400;
+  const height = parseInt(document.getElementById('height').value) || 250;
+  const { z } = determinePoints(shape, diameter, width, height);
+  const coef = getDefaultPdCoefficients(z);
+  
+  const coefMinField = document.getElementById('pd_coef_min');
+  const coefMaxField = document.getElementById('pd_coef_max');
+  
+  if (!coefMinField.classList.contains('manual')) {
+    coefMinField.value = coef.min;
+  }
+  if (!coefMaxField.classList.contains('manual')) {
+    coefMaxField.value = coef.max;
+  }
+  
+  const psOrient = parseFloat(document.getElementById('ps').value) || -218;
+  const psMinField = document.getElementById('ps_min');
+  const psMaxField = document.getElementById('ps_max');
+  
+  // Для 4 точек разброс ±2, для 8 и 16 точек разброс ±4 (чтобы хватало уникальных значений)
+  const psSpread = (z <= 4) ? 2 : 4;
+  
+  if (!psMinField.classList.contains('manual')) {
+    psMinField.value = Math.round(psOrient - psSpread);
+  }
+  if (!psMaxField.classList.contains('manual')) {
+    psMaxField.value = Math.round(psOrient + psSpread);
+  }
+}
+
+['pd_coef_min', 'pd_coef_max'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function() {
+    this.classList.add('manual');
+  });
+});
+
+['ps_min', 'ps_max'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function() {
+    this.classList.add('manual');
+  });
+});
+
+document.getElementById('shape').addEventListener('change', updatePdDefaults);
+['diameter', 'width', 'height'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updatePdDefaults);
+});
+
+document.getElementById('ps').addEventListener('input', function() {
+  const psMinField = document.getElementById('ps_min');
+  const psMaxField = document.getElementById('ps_max');
+  
+  // Определяем текущее количество точек для правильного разброса
+  const currentZ = determinePoints(
+    document.getElementById('shape').value,
+    parseInt(document.getElementById('diameter').value) || 315,
+    parseInt(document.getElementById('width').value) || 400,
+    parseInt(document.getElementById('height').value) || 250
+  ).z;
+  const psSpread = (currentZ <= 4) ? 2 : 4;
+  
+  if (!psMinField.classList.contains('manual')) {
+    psMinField.value = Math.round(parseFloat(this.value) - psSpread);
+  }
+  if (!psMaxField.classList.contains('manual')) {
+    psMaxField.value = Math.round(parseFloat(this.value) + psSpread);
+  }
+});
+
+function getKphiFromTable(t, phi) {
+  const tTable = [10, 20, 30, 40, 50];
+  const K_50 = [0.998, 1.000, 1.004, 1.010, 1.020];
+  const K_100 = [1.003, 1.005, 1.012, 1.025, 1.040];
+
+  let tRow = 10;
+  if (t <= 10) tRow = 10;
+  else if (t <= 20) tRow = 20;
+  else if (t <= 30) tRow = 30;
+  else if (t <= 40) tRow = 40;
+  else tRow = 50;
+
+  let rowIndex = tTable.indexOf(tRow);
+  let colName = (phi <= 50) ? "50%" : "100%";
+  let kValue = (phi <= 50) ? K_50[rowIndex] : K_100[rowIndex];
+
+  return { tRow, colName, kValue, t, phi };
+}
+
+function determinePoints(shape, diameter, width, height) {
+  let z, sizeInfo, area, coords, minF, maxF;
+  if (shape === 'circle') {
+    area = Math.PI * Math.pow(diameter / 1000 / 2, 2);
+    if (diameter <= 300) {
+      z = 4; sizeInfo = `Круг Ø${diameter} мм (≤300) → 4 точки`;
+      coords = ["0,224D", "0,776D", "0,224D*", "0,776D*"];
+      minF = 0.80; maxF = 1.20;
+    } else {
+      z = 8; sizeInfo = `Круг Ø${diameter} мм (>300) → 8 точек`;
+      coords = ["0,067D", "0,250D", "0,750D", "0,933D", "0,067D*", "0,250D*", "0,750D*", "0,933D*"];
+      minF = 0.50; maxF = 1.40;
+    }
+  } else {
+    area = (width / 1000) * (height / 1000);
+    const maxSide = Math.max(width, height);
+    if (maxSide <= 200) {
+      z = 4; sizeInfo = `Прямоугольник ${width}×${height} мм (большая ≤200) → 4 точки`;
+      coords = ["0,25a/0,25b", "0,75a/0,25b", "0,25a/0,75b", "0,75a/0,75b"];
+      minF = 0.80; maxF = 1.20;
+    } else {
+      z = 16; sizeInfo = `Прямоугольник ${width}×${height} мм (большая >200) → 16 точек`;
+      coords = Array.from({length:16}, (_, i) => `Ряд ${Math.floor(i/4)+1}, Тч ${(i%4)+1}`);
+      minF = 0.64; maxF = 1.39;
+    }
+  }
+  return { z, sizeInfo, area, coords, minF, maxF };
+}
+
+function getDefaultPdCoefficients(z) {
+  switch(z) {
+    case 4:  return { min: 0.80, max: 1.20 };
+    case 8:  return { min: 0.57, max: 1.43 };
+    case 16: return { min: 0.48, max: 1.52 };
+    default: return { min: 0.57, max: 1.43 };
+  }
+}
+
+function threeAround(base, maxDev, allowNegative = true) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const m1 = base + Math.floor(Math.random() * (2*maxDev+1)) - maxDev;
+    const m2 = base + Math.floor(Math.random() * (2*maxDev+1)) - maxDev;
+    const m3 = base * 3 - m1 - m2;
+    
+    if (Math.abs(m3 - base) <= maxDev + 1) {
+      if (allowNegative || (m1 >= 1 && m2 >= 1 && m3 >= 1)) {
+        return [m1, m2, m3].sort(() => Math.random() - 0.5);
+      }
+    }
+  }
+  return [base, base, base];
+}
+
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+let currentData = null;
+
+function generate() {
+  const shape = document.getElementById('shape').value;
+  const diameter = parseInt(document.getElementById('diameter').value);
+  const width = parseInt(document.getElementById('width').value);
+  const height = parseInt(document.getElementById('height').value);
+  const Pb = parseFloat(document.getElementById('pb').value);
+  const t = parseFloat(document.getElementById('temp').value);
+  const phi = parseFloat(document.getElementById('humidity').value);
+  const Pd_orient = parseFloat(document.getElementById('pd').value);
+  const Ps_orient = parseFloat(document.getElementById('ps').value);
+  const L_design = parseFloat(document.getElementById('l_design').value) || 0;
+
+  const { z, sizeInfo, area, coords, minF, maxF } = determinePoints(shape, diameter, width, height);
+  const kp = getKphiFromTable(t, phi);
+  const Kphi = kp.kValue;
+  const n = z * 3;
+
+  const devS = 1;
+  const devD = (z === 4) ? 1 : 2;
+
+  // ===== СТАТИКА =====
+  const psOrient = parseFloat(document.getElementById('ps').value);
+  const psMin = parseFloat(document.getElementById('ps_min').value);
+  const psMax = parseFloat(document.getElementById('ps_max').value);
+  const psDown = parseFloat(document.getElementById('ps_down').value) || 1;
+  const psUp = parseFloat(document.getElementById('ps_up').value) || 1;
+
+  if (psMin >= psMax) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка: Мин Pс должен быть меньше Макс Pс.</p>";
+    return;
+  }
+  if (psDown < 0 || psUp < 0) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка: значения внутри точки не могут быть отрицательными.</p>";
+    return;
+  }
+
+  // Умная проверка: сколько уникальных целых чисел реально помещается в диапазон
+  const availableUnique = Math.round(psMax - psMin) + 1;
+  // Требуемое количество: минимум половина точек, но не больше доступных в диапазоне
+  const requiredUnique = Math.min(Math.max(3, Math.floor(z / 2)), availableUnique);
+
+  let ps_bases = [];
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    let tmp = [];
+    for (let i = 0; i < z; i++) {
+      tmp.push(psMin + Math.random() * (psMax - psMin));
+    }
+    const uniqueCount = new Set(tmp.map(v => Math.round(v))).size;
+    if (uniqueCount < requiredUnique) continue;
+    ps_bases = tmp;
+    break;
+  }
+
+  if (ps_bases.length !== z) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка генерации статики.</p>";
+    return;
+  }
+
+  let journal_s = ps_bases.map(b => {
+    const base = Math.round(b);
+    let m1, m2, m3;
+    let attempts = 0;
+    do {
+      const dev1 = -Math.floor(Math.random() * (psDown + 1));
+      const dev2 = Math.floor(Math.random() * (psUp + 1));
+      m1 = base + dev1;
+      m2 = base + dev2;
+      m3 = base * 3 - m1 - m2;
+      attempts++;
+    } while ((m1 === m2 && m2 === m3) && attempts < 100);
+    return { s1: m1, s2: m2, s3: m3, avg: base };
+  });
+
+  let sAll = [];
+  journal_s.forEach(r => sAll.push(r.s1, r.s2, r.s3));
+  let sSum = sAll.reduce((a,b) => a+b, 0);
+  const Ps_avg = Math.round(sSum / n);
+
+  // ===== ДИНАМИКА =====
+  const pdOrient = parseFloat(document.getElementById('pd').value);
+  const pdCoefMin = parseFloat(document.getElementById('pd_coef_min').value) || 0.57;
+  const pdCoefMax = parseFloat(document.getElementById('pd_coef_max').value) || 1.43;
+  const pdDown = parseFloat(document.getElementById('pd_down').value) || 2;
+  const pdUp = parseFloat(document.getElementById('pd_up').value) || 2;
+
+  if (pdCoefMin >= pdCoefMax) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка: Коэф. мин должен быть меньше Коэф. макс.</p>";
+    return;
+  }
+  if (pdCoefMin < 0 || pdCoefMax < 0) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка: коэффициенты не могут быть отрицательными.</p>";
+    return;
+  }
+  if (pdDown < 0 || pdUp < 0) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка: значения внутри точки не могут быть отрицательными.</p>";
+    return;
+  }
+
+  const pdMin = pdOrient * pdCoefMin;
+  const pdMax = pdOrient * pdCoefMax;
+
+  let pd_bases = [];
+  let journal_d = [];
+  let pd_all = [];
+  let pd_success = false;
+
+  for (let attempt = 0; attempt < 30000; attempt++) {
+    let tmp = [];
+    for (let i = 0; i < z; i++) {
+      tmp.push(pdMin + Math.random() * (pdMax - pdMin));
+    }
+    const uniqueCount = new Set(tmp.map(v => Math.round(v))).size;
+    if (z === 4 && uniqueCount < 4) continue;
+    if (z > 4 && uniqueCount < z/2) continue;
+
+    let allTmp = [];
+    let jTmp = [];
+    let validAttempt = true;
+    
+    for (let i = 0; i < z; i++) {
+      const base = Math.round(tmp[i]);
+      let m1, m2, m3;
+      let attempts = 0;
+      do {
+        const dev1 = -Math.floor(Math.random() * (pdDown + 1));
+        const dev2 = Math.floor(Math.random() * (pdUp + 1));
+        m1 = base + dev1;
+        m2 = base + dev2;
+        m3 = base * 3 - m1 - m2;
+        attempts++;
+      } while ((m1 === m2 && m2 === m3) && attempts < 100);
+      
+      if (m3 < 1) { validAttempt = false; break; }
+      
+      jTmp.push({ d1: m1, d2: m2, d3: m3 });
+      allTmp.push(m1, m2, m3);
+    }
+    
+    if (!validAttempt) continue;
+
+    const sumSqrt = allTmp.reduce((s,v) => s + Math.sqrt(v), 0);
+    const rms = Math.round((sumSqrt / n) ** 2);
+
+    if (Math.abs(rms - pdOrient) <= 1) {
+      pd_bases = tmp;
+      journal_d = jTmp;
+      pd_all = allTmp;
+      pd_success = true;
+      break;
+    }
+  }
+
+  if (!pd_success) {
+    document.getElementById('output').innerHTML = "<p style='color:red'>Ошибка генерации динамики. Попробуйте изменить ориентир Pд или расширить диапазон коэффициентов.</p>";
+    return;
+  }
+
+  const sumSqrtFinal = pd_all.reduce((s,v) => s + Math.sqrt(v), 0);
+  const Pd_rms_exact = (sumSqrtFinal / n) ** 2;
+  const Pd_rms = Math.round(Pd_rms_exact); // 1. Округляем Pд.ср до целого
+
+  const rho = (Pb + Ps_avg) / (287 * Kphi * (t + 273)); // 273 по ГОСТ
+  
+  // 2. Цепочка для скорости: считаем от округленного Pд.ср
+  const V_avg_exact = Math.sqrt(2 * Pd_rms / rho);
+  const V_avg = Math.round(V_avg_exact * 100) / 100; // Округляем до 2 знаков
+  
+  // 3. Округляем площадь до 4 знаков для расчета расхода (как договаривались)
+  const area_rounded = Math.round(area * 10000) / 10000;
+  
+  // 4. Цепочка для расхода: считаем строго от округленной скорости и округленной площади
+  const L_actual_exact = V_avg * area_rounded * 3600;
+  const L_actual = Math.round(L_actual_exact * 100) / 100; // Округляем до 2 знаков
+  
+  const P_full = Ps_avg + Pd_rms;
+
+  let indices = Array.from({length: z}, (_, i) => i);
+  indices = shuffleArray(indices);
+
+currentData = { z, area, area_rounded, coords, indices, Pb, t, phi, Kphi, kp, journal_s, journal_d, n, L_design, shape, diameter, width, height };
+  renderTable(indices, journal_s, journal_d, coords, z, sizeInfo, area, rho, Ps_avg, Pd_rms, P_full, V_avg, L_actual, kp, Kphi, n, L_design);
+}
+
+function renderTable(indices, journal_s, journal_d, coords, z, sizeInfo, area, rho, Ps_avg, Pd_rms, P_full, V_avg, L_actual, kp, Kphi, n, L_design) {
+  let html = `<div class="info-box"><b>${sizeInfo}</b><br>n = ${n} замеров | S = <b>${area.toFixed(4)} м²</b> | ρ = <b>${rho.toFixed(3)} кг/м³</b></div>`;
+
+  // 1. ЕДИНОЖДЫ вычисляем отклонение (убран дубликат)
+  let devPercent = 0, devClass = "dev-good", devText = "—";
+  if (L_design > 0) {
+    devPercent = ((L_actual - L_design) / L_design) * 100;
+    devClass = Math.abs(devPercent) > 10 ? "dev-bad" : "dev-good";
+    devText = (devPercent > 0 ? "+" : "") + devPercent.toFixed(1) + "%";
+  }
+
+  // 2. Рисуем желтую плашку с краткими итогами (горизонтально)
+  html += `<div class="recalc-hint">
+    <table>
+      <tr>
+        <td><b>P<sub>д.ср</sub> = ${Pd_rms} Па</b></td>
+        <td><b>P<sub>ст.ср</sub> = ${Ps_avg} Па</b></td>
+        <td><b>V = ${V_avg.toFixed(2)} м/с</b></td>
+        <td><b>L = ${L_actual.toFixed(2)} м³/ч</b></td>
+        <td><b>P<sub>п</sub> = ${P_full} Па</b></td>
+        <td><b>Отклонение: <span class="${devClass}">${devText}</span></b></td>
+      </tr>
+    </table>
+  </div>`;
+
+  // 3. Рисуем таблицу
+  html += `<table id="dataTable">
+    <tr>
+      <th rowspan="2">№</th>
+      <th colspan="3">Статическое давление, Па</th>
+      <th colspan="3">Динамическое давление, Па</th>
+    </tr>
+    <tr class="sub-header">
+      <th>1</th><th>2</th><th>3</th>
+      <th>1</th><th>2</th><th>3</th>
+    </tr>`;
+  
+  for (let idx = 0; idx < z; idx++) {
+    const i = indices[idx];
+    const s = journal_s[i], d = journal_d[i];
+    html += `<tr data-idx="${idx}" data-orig="${i}">
+      <td>${idx+1}</td>
+      <td><input type="number" class="editable" data-type="s" data-pos="1" value="${s.s1}"></td>
+      <td><input type="number" class="editable" data-type="s" data-pos="2" value="${s.s2}"></td>
+      <td><input type="number" class="editable" data-type="s" data-pos="3" value="${s.s3}"></td>
+      <td><input type="number" class="editable" data-type="d" data-pos="1" value="${d.d1}"></td>
+      <td><input type="number" class="editable" data-type="d" data-pos="2" value="${d.d2}"></td>
+      <td><input type="number" class="editable" data-type="d" data-pos="3" value="${d.d3}"></td>
+    </tr>`;
+  }
+  html += `</table>`;
+  html += `<button class="recalc" onclick="recalculate()">Пересчитать итоги по введённым данным</button>`;
+  html += `<button class="btn-show-formulas" onclick="openFormulas()">Показать расчёты</button>`;
+  html += `<button class="btn-export" onclick="exportToExcelPressure()">Экспорт в Excel</button>`;
+
+  // 4. Готовим данные для формул
+  const sAll = []; journal_s.forEach(r => sAll.push(r.s1, r.s2, r.s3));
+  const sList = sAll.join(' + ');
+  const pd_all_arr = []; journal_d.forEach(r => pd_all_arr.push(r.d1, r.d2, r.d3));
+  const roots = pd_all_arr.map(v => '√' + v).join(' + ');
+  const Pd_rms_exact_render = (pd_all_arr.reduce((s, v) => s + Math.sqrt(v), 0) / n) ** 2;
+
+  // 5. Рисуем подробные формулы 1-8
+  // Формируем HTML формул и вставляем в модальное окно
+  const formulasHtml = `
+    <div class="formula-box">
+      <span class="general">1. Среднее динамическое при n = ${n} замеров):</span><br>
+      <span class="sub">P<sub>д.ср</sub> = ((√P<sub>д1</sub> + √P<sub>д2</sub> + … + √P<sub>дn</sub>) / n)²</span><br>
+      <span class="kphi">P<sub>д.ср</sub> = ((${roots}) / ${n})² = (${Math.sqrt(Pd_rms_exact_render).toFixed(4)})² = ${Pd_rms_exact_render.toFixed(2)} Па → <span class="res">${Pd_rms} Па</span></span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">2. Среднее статическое при n = ${n} замеров):</span><br>
+      <span class="sub">P<sub>ст.ср</sub> = (P<sub>с1</sub> + P<sub>с2</sub> + … + P<sub>сn</sub>) / n</span><br>
+      <span class="kphi">P<sub>ст.ср</sub> = (${sList}) / ${n} = <span class="res">${Ps_avg} Па</span></span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">3. Коэффициент K<sub>φ</sub> (по Таблице 1 ГОСТ):</span><br>
+      t = ${kp.t}°C → граница <b>${kp.tRow}°C</b>; φ = ${kp.phi}% → столбец <b>${kp.colName}</b><br>
+      Принято: <span class="res">K<sub>φ</sub> = ${kp.kValue}</span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">4. Плотность воздуха:</span><br>
+      <span class="sub">ρ = (B<sub>а</sub> + P<sub>ст.ср</sub>) / (287 · K<sub>φ</sub> · (t + 273))</span><br>
+      ρ = (${currentData.Pb} + (${Ps_avg})) / (287 · ${kp.kValue} · (${kp.t} + 273)) = <span class="res">${rho.toFixed(3)} кг/м³</span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">5. Скорость (считается от округленного P<sub>д.ср</sub>):</span> <span class="sub">V = √(2 · P<sub>д.ср</sub> / ρ)</span><br>
+      V = √(2 · ${Pd_rms} / ${rho.toFixed(3)}) = ${Math.sqrt(2 * Pd_rms / rho).toFixed(4)} м/с → <span class="res">${V_avg.toFixed(2)} м/с</span><br><br>
+      <span class="general">6. Расход (считается от округленной V и S):</span> <span class="sub">L = V · S · 3600</span><br>
+      L = ${V_avg.toFixed(2)} · ${currentData.area_rounded.toFixed(4)} · 3600 = ${(V_avg * currentData.area_rounded * 3600).toFixed(4)} м³/ч → <span class="res">${L_actual.toFixed(2)} м³/ч</span><br><br>
+      <span class="general">7. Полное давление:</span> <span class="sub">P<sub>п</sub> = P<sub>ст.ср</sub> + P<sub>д.ср</sub></span><br>
+      P<sub>п</sub> = (${Ps_avg}) + ${Pd_rms} = <span class="res">${P_full} Па</span><br><br>
+      <span class="general">8. Отклонение расхода от проекта:</span><br>
+      Проект: ${L_design} м³/ч | Факт: ${L_actual.toFixed(2)} м³/ч<br>
+      Отклонение: <span class="${devClass}">${devText}</span> ${Math.abs(devPercent) > 10 ? '(Требует внимания, >10%)' : '(В пределах нормы ±10%)'}
+    </div>
+  `;
+  document.getElementById('modalFormulas').innerHTML = formulasHtml;
+
+  // 6. Выводим всё на экран
+  document.getElementById('output').innerHTML = html;
+
+  document.querySelectorAll('.editable').forEach(input => {
+    const originalValue = input.value;
+    input.addEventListener('input', function() {
+      if (this.value !== originalValue) this.classList.add('manual');
+      else this.classList.remove('manual');
+    });
+  });
+}
+
+
+function recalculate() {
+  if (!currentData) { alert('Сначала сгенерируйте журнал'); return; }
+  
+  const { z, area, Pb, t, phi, Kphi, n, L_design, kp } = currentData;
+  const rows = document.querySelectorAll('#dataTable tr[data-idx]');
+  const newJournal_s = [], allS = [], allD = [];
+
+  rows.forEach(row => {
+    const idx = parseInt(row.dataset.idx);
+    const inputs = row.querySelectorAll('.editable');
+    const s1 = parseFloat(inputs[0].value), s2 = parseFloat(inputs[1].value), s3 = parseFloat(inputs[2].value);
+    const d1 = parseFloat(inputs[3].value), d2 = parseFloat(inputs[4].value), d3 = parseFloat(inputs[5].value);
+
+    if (isNaN(s1) || isNaN(s2) || isNaN(s3) || isNaN(d1) || isNaN(d2) || isNaN(d3)) {
+      alert(`Точка ${idx+1}: заполните все поля`); return;
+    }
+
+    newJournal_s.push({ s1, s2, s3, avg: Math.round((s1 + s2 + s3) / 3) });
+    allS.push(s1, s2, s3); allD.push(d1, d2, d3);
+  });
+
+  if (newJournal_s.length !== z) return;
+
+  const sSum = allS.reduce((a,b) => a+b, 0);
+  const Ps_avg = Math.round(sSum / n);
+  const sumSqrtFinal = allD.reduce((s,v) => s + Math.sqrt(v), 0);
+  
+  const Pd_rms_exact_calc = (sumSqrtFinal / n) ** 2;
+  const Pd_rms = Math.round(Pd_rms_exact_calc); // Округляем до целого
+
+  const rho = (Pb + Ps_avg) / (287 * Kphi * (t + 273)); // 273 по ГОСТ
+  
+  // Цепочка для скорости
+  const V_avg_exact_calc = Math.sqrt(2 * Pd_rms / rho);
+  const V_avg = Math.round(V_avg_exact_calc * 100) / 100;
+  
+  // Используем округленную площадь из currentData
+  const area_rounded = currentData.area_rounded || Math.round(currentData.area * 10000) / 10000;
+  
+  // Цепочка для расхода
+  const L_actual_exact_calc = V_avg * area_rounded * 3600;
+  const L_actual = Math.round(L_actual_exact_calc * 100) / 100;
+  
+  const P_full = Ps_avg + Pd_rms;
+
+  const roots = allD.map(v => '√' + v).join(' + ');
+  const sList = allS.join(' + ');
+
+  let devPercent = 0, devClass = "dev-good", devText = "—";
+  if (L_design > 0) {
+    devPercent = ((L_actual - L_design) / L_design) * 100;
+    devClass = Math.abs(devPercent) > 10 ? "dev-bad" : "dev-good";
+    devText = (devPercent > 0 ? "+" : "") + devPercent.toFixed(1) + "%";
+  }
+
+  // Обновляем желтую плашку с краткими итогами при пересчете (горизонтально)
+  const recalcHint = document.querySelector('.recalc-hint');
+  recalcHint.innerHTML = `
+    <table>
+      <tr>
+        <td><b>P<sub>д.ср</sub> = ${Pd_rms} Па</b></td>
+        <td><b>P<sub>ст.ср</sub> = ${Ps_avg} Па</b></td>
+        <td><b>V = ${V_avg.toFixed(2)} м/с</b></td>
+        <td><b>L = ${L_actual.toFixed(2)} м³/ч</b></td>
+        <td><b>P<sub>п</sub> = ${P_full} Па</b></td>
+        <td><b>Отклонение: <span class="${devClass}">${devText}</span></b></td>
+      </tr>
+    </table>
+  `;
+
+  // Обновляем формулы в модальном окне
+  const formulasHtml = `
+    <div class="formula-box">
+      <span class="general">1. Среднее динамическое (ГОСТ п.5.4, n = ${n} замеров):</span><br>
+      <span class="sub">P<sub>д.ср</sub> = ((√P<sub>д1</sub> + √P<sub>д2</sub> + … + √P<sub>дn</sub>) / n)²</span><br>
+      <span class="kphi">P<sub>д.ср</sub> = ((${roots}) / ${n})² = (${Math.sqrt(Pd_rms_exact_calc).toFixed(4)})² = ${Pd_rms_exact_calc.toFixed(2)} Па → <span class="res">${Pd_rms} Па</span></span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">2. Среднее статическое (ГОСТ п.5.9, n = ${n} замеров):</span><br>
+      <span class="sub">P<sub>ст.ср</sub> = (P<sub>с1</sub> + P<sub>с2</sub> + … + P<sub>сn</sub>) / n</span><br>
+      <span class="kphi">P<sub>ст.ср</sub> = (${sList}) / ${n} = <span class="res">${Ps_avg} Па</span></span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">3. Коэффициент K<sub>φ</sub> (по Таблице 1 ГОСТ, без интерполяции):</span><br>
+      t = ${kp.t}°C → граница <b>${kp.tRow}°C</b>; φ = ${kp.phi}% → столбец <b>${kp.colName}</b><br>
+      Принято: <span class="res">K<sub>φ</sub> = ${kp.kValue}</span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">4. Плотность воздуха:</span><br>
+      <span class="sub">ρ = (B<sub>а</sub> + P<sub>ст.ср</sub>) / (287 · K<sub>φ</sub> · (t + 273))</span><br>
+      ρ = (${Pb} + (${Ps_avg})) / (287 · ${kp.kValue} · (${t} + 273)) = <span class="res">${rho.toFixed(3)} кг/м³</span>
+    </div>
+
+    <div class="formula-box">
+      <span class="general">5. Скорость (считается от округленного P<sub>д.ср</sub>):</span> <span class="sub">V = √(2 · P<sub>д.ср</sub> / ρ)</span><br>
+      V = √(2 · ${Pd_rms} / ${rho.toFixed(3)}) = ${Math.sqrt(2 * Pd_rms / rho).toFixed(4)} м/с → <span class="res">${V_avg.toFixed(2)} м/с</span><br><br>
+      <span class="general">6. Расход (считается от округленной V и S):</span> <span class="sub">L = V · S · 3600</span><br>
+      L = ${V_avg.toFixed(2)} · ${(currentData.area_rounded || currentData.area).toFixed(4)} · 3600 = ${(V_avg * (currentData.area_rounded || currentData.area) * 3600).toFixed(4)} м³/ч → <span class="res">${L_actual.toFixed(2)} м³/ч</span><br><br>
+      <span class="general">7. Полное давление:</span> <span class="sub">P<sub>п</sub> = P<sub>ст.ср</sub> + P<sub>д.ср</sub></span><br>
+      P<sub>п</sub> = (${Ps_avg}) + ${Pd_rms} = <span class="res">${P_full} Па</span><br><br>
+      <span class="general">8. Отклонение расхода от проекта:</span><br>
+      Проект: ${L_design} м³/ч | Факт: ${L_actual.toFixed(2)} м³/ч<br>
+      Отклонение: <span class="${devClass}">${devText}</span> ${Math.abs(devPercent) > 10 ? '(Требует внимания, >10%)' : '(В пределах нормы ±10%)'}
+    </div>
+  `;
+  document.getElementById('modalFormulas').innerHTML = formulasHtml;
+
+  const btn = document.querySelector('button.recalc');
+  const originalText = btn.textContent;
+  btn.textContent = 'Пересчитано ✓';
+  setTimeout(() => { btn.textContent = originalText; }, 1500);
+}
+let isDragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+// Функция открытия модального окна с формулами
+function openFormulas() {
+  recalculate();
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  
+  // Сбрасываем позицию окна при открытии
+  const modalWindow = document.getElementById('modalWindow');
+  modalWindow.style.left = '';
+  modalWindow.style.top = '';
+  modalWindow.style.position = 'relative';
+  modalWindow.classList.remove('minimized');
+}
+
+// Функция закрытия модального окна
+function closeFormulas() {
+  document.getElementById('modalOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// Функция сворачивания/разворачивания
+function toggleMinimize() {
+  const modalWindow = document.getElementById('modalWindow');
+  modalWindow.classList.toggle('minimized');
+}
+
+// Перетаскивание окна
+document.getElementById('modalHeader').addEventListener('mousedown', function(e) {
+  isDragging = true;
+  const modalWindow = document.getElementById('modalWindow');
+  const rect = modalWindow.getBoundingClientRect();
+  dragOffsetX = e.clientX - rect.left;
+  dragOffsetY = e.clientY - rect.top;
+  modalWindow.style.position = 'fixed';
+  modalWindow.style.left = rect.left + 'px';
+  modalWindow.style.top = rect.top + 'px';
+  modalWindow.style.margin = '0';
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (isDragging) {
+    const modalWindow = document.getElementById('modalWindow');
+    modalWindow.style.left = (e.clientX - dragOffsetX) + 'px';
+    modalWindow.style.top = (e.clientY - dragOffsetY) + 'px';
+  }
+});
+
+document.addEventListener('mouseup', function() {
+  isDragging = false;
+});
+
+// Закрытие по клику на подложку (вне окна)
+function closeFormulasOutside(event) {
+  if (event.target === document.getElementById('modalOverlay')) {
+    closeFormulas();
+  }
+}
+
+// Закрытие по клавише Escape
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') {
+    closeFormulas();
+  }
+});
+function exportToExcelPressure() {
+  if (!currentData) { alert('Сначала сгенерируйте журнал'); return; }
+  
+  const { z, area, Pb, t, phi, Kphi, n, L_design, kp, shape, diameter, width, height } = currentData;
+  const rows = document.querySelectorAll('#dataTable tr[data-idx]');
+  
+  let allS = [], allD = [];
+  let tableRowsHtml = '';
+  
+  rows.forEach((row, idx) => {
+    const inputs = row.querySelectorAll('.editable');
+    const s1 = parseFloat(inputs[0].value), s2 = parseFloat(inputs[1].value), s3 = parseFloat(inputs[2].value);
+    const d1 = parseFloat(inputs[3].value), d2 = parseFloat(inputs[4].value), d3 = parseFloat(inputs[5].value);
+    
+    allS.push(s1, s2, s3);
+    allD.push(d1, d2, d3);
+    
+    const sAvg = Math.round((s1 + s2 + s3) / 3);
+    
+    tableRowsHtml += `<tr>
+      <td>${idx + 1}</td>
+      <td style="mso-number-format:0;">${s1}</td>
+      <td style="mso-number-format:0;">${s2}</td>
+      <td style="mso-number-format:0;">${s3}</td>
+      <td style="mso-number-format:0;"><b>${sAvg}</b></td>
+      <td style="mso-number-format:0;">${d1}</td>
+      <td style="mso-number-format:0;">${d2}</td>
+      <td style="mso-number-format:0;">${d3}</td>
+    </tr>`;
+  });
+
+  const sSum = allS.reduce((a, b) => a + b, 0);
+  const Ps_avg = Math.round(sSum / n);
+  const sumSqrtFinal = allD.reduce((s, v) => s + Math.sqrt(v), 0);
+  const Pd_rms_exact = (sumSqrtFinal / n) ** 2;
+  const Pd_rms = Math.round(Pd_rms_exact); // 1. Округляем Pд.ср
+
+  const rho = (Pb + Ps_avg) / (287 * Kphi * (t + 273)); // 273 по ГОСТ
+  
+  // 2. Цепочка для скорости (как на экране)
+  const V_avg_exact = Math.sqrt(2 * Pd_rms / rho);
+  const V_avg = Math.round(V_avg_exact * 100) / 100;
+  
+  // 3. Цепочка для расхода (используем округленную площадь из currentData)
+  const area_rounded = currentData.area_rounded || Math.round(area * 10000) / 10000;
+  const L_actual_exact = V_avg * area_rounded * 3600;
+  const L_actual = Math.round(L_actual_exact * 100) / 100;
+  
+  const P_full = Ps_avg + Pd_rms;
+
+  let devPercent = 0, devText = "—";
+  if (L_design > 0) {
+    devPercent = ((L_actual - L_design) / L_design) * 100;
+    devText = (devPercent > 0 ? "+" : "") + devPercent.toFixed(1) + "%";
+  }
+
+  const num = (v) => v.toFixed(2).replace('.', ',');
+  const num4 = (v) => v.toFixed(4).replace('.', ',');
+
+  let html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+  html += '<head><meta charset="UTF-8">';
+  html += '<style>td,th{font-family:Calibri;font-size:11pt;border:1px solid #000;} th{background:#4472C4;color:white;font-weight:bold;text-align:center;} .title{background:#D9E1F2;font-weight:bold;text-align:center;font-size:14pt;} .label{font-weight:bold;background:#F2F2F2;}</style>';
+  html += '</head><body>';
+  html += '<table border="1" cellspacing="0" cellpadding="4">';
+  
+  html += `<tr><td colspan="8" class="title">Протокол аэродинамических испытаний воздуховода</td></tr>`;
+  html += `<tr><td class="label">Форма:</td><td>${shape === 'circle' ? 'Круглый' : 'Прямоугольный'}</td><td class="label">Размер:</td><td colspan="5">${shape === 'circle' ? 'Ø' + diameter + ' мм' : width + '×' + height + ' мм'}</td></tr>`;
+  html += `<tr><td class="label">Площадь S:</td><td style="mso-number-format:0\\.0000;">${num4(area)}</td><td class="label">Температура:</td><td style="mso-number-format:0\\.0;">${t.toFixed(1).replace('.',',')} °C</td><td class="label">Влажность:</td><td style="mso-number-format:0\\.0;">${phi.toFixed(1).replace('.',',')} %</td><td class="label">K<sub>φ</sub>:</td><td style="mso-number-format:0\\.000;">${Kphi.toFixed(3).replace('.',',')}</td></tr>`;
+  html += `<tr><td class="label">Барометр B<sub>а</sub>:</td><td style="mso-number-format:0;">${Math.round(Pb)} Па</td><td class="label">L проект:</td><td style="mso-number-format:0;">${Math.round(L_design)} м³/ч</td><td colspan="4"></td></tr>`;
+  html += `<tr><td colspan="8"></td></tr>`;
+  
+  html += `<tr><td class="label">P<sub>д.ср</sub>:</td><td style="mso-number-format:0;">${Pd_rms} Па</td><td class="label">P<sub>ст.ср</sub>:</td><td style="mso-number-format:0;">${Ps_avg} Па</td><td class="label">V ср:</td><td style="mso-number-format:0\\.00;">${num(V_avg)}</td><td class="label">L факт:</td><td style="mso-number-format:0\\.00;">${num(L_actual)}</td></tr>`;
+  html += `<tr><td class="label">P полное:</td><td style="mso-number-format:0;">${P_full} Па</td><td class="label">Отклонение:</td><td colspan="5" style="color:${Math.abs(devPercent)>10?'red':'green'}; font-weight:bold;">${devText}</td></tr>`;
+  html += `<tr><td colspan="8"></td></tr>`;
+
+  html += `<tr><th rowspan="2">№</th><th colspan="4">Статическое давление, Па</th><th colspan="3">Динамическое давление, Па</th></tr>`;
+  html += `<tr><th>1</th><th>2</th><th>3</th><th>Среднее</th><th>1</th><th>2</th><th>3</th></tr>`;
+  html += tableRowsHtml;
+
+  html += '</table></body></html>';
+
+  const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'protokol_davleniya_' + Date.now() + '.xls';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+</script>
+</body>
+</html>
