@@ -383,8 +383,37 @@ function generate() {
     bases.push(base);
   }
   const sumBase = bases.reduce((a,b)=>a+b,0);
-  const correction = (V_target * numPoints - sumBase) / numPoints;
-  for (let i = 0; i < numPoints; i++) bases[i] += correction;
+  let diff = V_target * numPoints - sumBase;
+  
+  // Жёсткая проверка: входит ли целевая скорость в заданные границы
+  if (V_target < interMin || V_target > interMax) {
+    document.getElementById('info-box').innerHTML = '<div class="info-box error">⚠️ Целевая скорость Vср = ' + V_target.toFixed(2) + ' м/с выходит за заданный диапазон ' + interMin.toFixed(2) + '–' + interMax.toFixed(2) + ' м/с. Измените пределы или расход.</div>';
+    return;
+  }
+
+  let guard = 0;
+  while (Math.abs(diff) > 0.005 && guard < 50000) {
+    guard++;
+    const order = bases.map((_, i) => i).sort(() => Math.random() - 0.5);
+    let moved = false;
+    for (const i of order) {
+      const adj = diff > 0 ? 0.01 : -0.01;
+      const nb = bases[i] + adj;
+      // ЖЁСТКОЕ ОГРАНИЧЕНИЕ: точка не может выйти за interMin и interMax
+      if (nb >= interMin && nb <= interMax) {
+        bases[i] = Math.round(nb * 100) / 100;
+        diff -= adj;
+        moved = true;
+        if (Math.abs(diff) <= 0.005) break;
+      }
+    }
+    if (!moved) break; // Если все точки уперлись в границы, дальше двигаться некуда
+  }
+
+  if (Math.abs(diff) > 0.05) {
+    document.getElementById('info-box').innerHTML = '<div class="info-box error">⚠️ Невозможно выдержать среднюю скорость ' + V_target.toFixed(2) + ' м/с в жёстких границах ' + interMin.toFixed(2) + '–' + interMax.toFixed(2) + ' м/с. Расширьте межточечный интервал.</div>';
+    return;
+  }
 
   const measurements = [];
   for (let i = 0; i < numPoints; i++) {
@@ -396,57 +425,56 @@ function generate() {
       do {
         const side = Math.random() > 0.5 ? 'up' : 'down';
         if (side === 'down') {
-          const minVal = base - maxDown;
+          // ЖЁСТКО: не даем уйти ниже нижнего предела
+          const minVal = Math.max(interMin, base - maxDown);
           const maxVal = base - deadDown;
           if (maxVal > minVal) {
             value = minVal + Math.random() * (maxVal - minVal);
           } else {
-            value = base - (deadDown + Math.random() * (maxDown - deadDown));
+            value = Math.max(interMin, base - (deadDown + Math.random() * (maxDown - deadDown)));
           }
         } else {
+          // ЖЁСТКО: не даем уйти выше верхнего предела
+          const effectiveMaxUp = Math.min(maxUp, interMax - base);
           const minVal = base + deadUp;
-          const maxVal = base + maxUp;
+          const maxVal = base + effectiveMaxUp;
           if (maxVal > minVal) {
             value = minVal + Math.random() * (maxVal - minVal);
           } else {
-            value = base + (deadUp + Math.random() * (maxUp - deadUp));
+            value = Math.min(interMax, base + (deadUp + Math.random() * Math.max(0, maxUp - deadUp)));
           }
         }
         tries++;
       } while (row.some(v => Math.abs(v - value) < 0.01) && tries < maxAttempts);
+      
       if (tries >= maxAttempts) {
-        const upSpace = maxUp - deadUp;
-        const downSpace = maxDown - deadDown;
-        if (upSpace > 0 && downSpace > 0) {
-          value = base + (Math.random() > 0.5 ? 1 : -1) * (Math.random() > 0.5 ? deadUp + 0.01 : deadDown + 0.01);
-        } else if (upSpace > 0) {
-          value = base + deadUp + 0.01;
-        } else if (downSpace > 0) {
-          value = base - deadDown - 0.01;
-        } else {
-          value = base + (Math.random() > 0.5 ? 0.01 : -0.01);
-        }
+        // Абсолютно безопасный откат с жесткими границами
+        let fallback = base + (Math.random() > 0.5 ? 0.01 : -0.01);
+        value = Math.max(interMin, Math.min(interMax, fallback));
       }
-      row.push(Math.round(value * 100) / 100);
+      let v = Math.round(value * 100) / 100;
+      v = Math.min(interMax, Math.max(interMin, v));
+      row.push(v);
     }
     measurements.push(row);
   }
 
   let totalSum = 0;
   measurements.forEach(row => row.forEach(m => totalSum += m));
-  let diff = Math.round((V_target * numPoints * 3 - totalSum) * 100) / 100;
+  let diff2 = Math.round((V_target * numPoints * 3 - totalSum) * 100) / 100;
   const indices = Array.from({length: numPoints * 3}, (_, i) => i).sort(() => Math.random() - 0.5);
   let idx = 0;
-  while (Math.abs(diff) > 0.005 && idx < indices.length) {
+  while (Math.abs(diff2) > 0.005 && idx < indices.length) {
     const r = Math.floor(indices[idx] / 3), c = indices[idx] % 3;
-    const adj = diff > 0 ? 0.01 : -0.01;
+    const adj = diff2 > 0 ? 0.01 : -0.01;
     const newVal = Math.round((measurements[r][c] + adj) * 100) / 100;
     const base = bases[r];
     const inDeadZone = newVal > (base - deadDown) && newVal < (base + deadUp);
     const isDuplicate = measurements[r].some((v, vi) => vi !== c && Math.abs(v - newVal) < 0.005);
-    if (!inDeadZone && !isDuplicate && newVal > 0) {
+    const inBounds = newVal >= interMin && newVal <= interMax;
+    if (!inDeadZone && !isDuplicate && newVal > 0 && inBounds) {
       measurements[r][c] = newVal;
-      diff -= adj;
+      diff2 -= adj;
     }
     idx++;
   }
