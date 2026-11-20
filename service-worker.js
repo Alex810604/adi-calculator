@@ -1,4 +1,4 @@
-const CACHE_NAME = 'adi-calc-v3';
+const CACHE_NAME = 'adi-calc-v4';
 const FILES_TO_CACHE = [
   './index.html',
   './calculator_Pressure.html',
